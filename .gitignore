@@ -1,1 +1,5 @@
 pod.secrets.env
+assets/**
+db/**
+!assets/**/.gitkeep
+!db/**/.gitkeep
