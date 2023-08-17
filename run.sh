@@ -8,15 +8,22 @@ if [ "$1" == "stop" ]; then
     podman stop penpot-exporter
     podman stop penpot-backend
     podman stop penpot-frontend
+    podman pod rm penpot
+    podman network rm penpot
     exit 0
 fi
 
 echo "Creating Penpot network if it does not exist..."
-podman network create --ignore penpot
+podman network create penpot
 
-podman run --rm --name=penpot-mailcatch --network=penpot --expose=1025 -p 1080:1080 -d sj26/mailcatcher:latest
-podman run --rm --name=penpot-redis --network=penpot -d redis:7
-podman run --rm --name=penpot-postgres --network=penpot --user 1000 --volume=./db:/var/lib/postgresql/data:rw --env-file=./pod.env -d postgres:15
-podman run --rm --name=penpot-exporter --network=penpot --env-file=./pod.env -d penpotapp/exporter:latest
-podman run --rm --name=penpot-backend --network=penpot --env-file=./pod.env --env-file=./pod.secrets.env --volume=./assets:/opt/data/assets:rw --requires=penpot-postgres,penpot-redis -d penpotapp/backend:latest
-podman run --rm --name=penpot-frontend --network=penpot --env-file=./pod.env --volume=./assets:/opt/data/assets:rw -p 9001:80 --requires=penpot-backend,penpot-exporter -d penpotapp/frontend:latest
+podman pod create --replace --network penpot -p 127.0.0.1:9001:80 -p 127.0.0.1:1080:1080 penpot
+
+podman run --replace --name=penpot-mailcatch --expose=1025 --pod penpot -d sj26/mailcatcher:latest
+podman run --replace --name=penpot-redis --pod penpot -d redis:7
+podman run --replace --name=penpot-postgres --pod penpot --volume=./db:/var/lib/postgresql/data:rw --env-file=./pod.env -d postgres:15
+
+# Uncommen when need be
+podman run --replace --name=penpot-exporter --pod penpot --env-file=./pod.env -d penpotapp/exporter:latest
+
+podman run --replace --name=penpot-backend --pod penpot --env-file=./pod.env --env-file=./pod.secrets.env --volume=./assets:/opt/data/assets:U,rw --user=0:0 --requires=penpot-redis,penpot-postgres -d penpotapp/backend:latest
+podman run --replace --name=penpot-frontend --pod penpot --env-file=./pod.env --volume=./assets:/opt/data/assets:rw --requires=penpot-backend -d penpotapp/frontend:latest
